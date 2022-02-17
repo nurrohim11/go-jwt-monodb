@@ -7,46 +7,59 @@ import (
 	"os"
 	"time"
 
+	"jwtgolang-mongodb/database"
+
 	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/riad-safowan/JWT-GO-MongoDB/database"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	// "go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type SignedDetails struct {
-	Email      string
-	First_name string
-	Last_name  string
-	Uid        string
-	User_type  string
-	Token_type string
+	Email        string
+	First_name   string
+	Last_name    string
+	Uid          string
+	User_type    string
+	Firebase_uid string
+	Token_type   string
 	jwt.StandardClaims
 }
 
 var userCollection *mongo.Collection = database.OpenCollection(database.Client, "user")
 
 func GenerateAllToken(email string, firstName string, lastName string, userType string, uid string) (signedAccessToken string, signedRefreshToken string, err error) {
+
+	local, _ := time.LoadLocation("Asia/Jakarta")
+
 	accessClaims := &SignedDetails{
 		Email:      email,
 		First_name: firstName,
 		Last_name:  lastName,
 		User_type:  userType,
 		Uid:        uid,
-		Token_type :"access_token",
+		Token_type: "access_token",
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Minute * time.Duration(20)).Unix(),
+			ExpiresAt: time.Now().In(local).Add(time.Minute * time.Duration(24)).Unix(),
 		},
 	}
 
 	refreshClaims := &SignedDetails{
-		Uid: uid,
-		Token_type :"refresh_token",
+		Uid:        uid,
+		Token_type: "refresh_token",
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(24*7)).Unix(),
+			ExpiresAt: time.Now().In(local).Add(time.Hour * time.Duration(24*7)).Unix(),
 		},
 	}
+
+	// firebaseClaims := map[string]interface{}{
+	// 	"Email":      email,
+	// 	"First_name": firstName,
+	// 	"Last_name":  lastName,
+	// 	"User_type":  userType,
+	// 	"Uid":        uid,
+	// 	"Token_type": "access_token",
+	// }
 
 	accessToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString([]byte(os.Getenv("SECRET_KEY")))
 	if err != nil {
@@ -58,6 +71,13 @@ func GenerateAllToken(email string, firstName string, lastName string, userType 
 		log.Panic(err)
 		return
 	}
+
+	// firebaseAuth := configs.SetupFirebase()
+	// firebaseToken, errors := firebaseAuth.CustomTokenWithClaims(context.Background(), uid, firebaseClaims)
+	// if errors != nil {
+	// 	log.Panic(errors)
+	// 	return
+	// }
 
 	return accessToken, refreshToken, err
 
@@ -73,9 +93,7 @@ func UpdateAllTokens(signedAccessToken string, signedRefreshToken string, userId
 	_, err := userCollection.UpdateOne(
 		ctx,
 		bson.M{"_id": id},
-		bson.D{
-			{"$set", bson.D{{"access_token", signedAccessToken}, {"refresh_token", signedRefreshToken}, {"updated_at", updated_at}}},
-		},
+		bson.M{"$set": bson.M{"access_token": signedAccessToken, "refresh_token": signedRefreshToken, "update_at": updated_at}},
 	)
 
 	defer cancel()
@@ -113,4 +131,3 @@ func ValidateToken(signedToken string) (claims *SignedDetails, msg string) {
 
 	return claims, msg
 }
-

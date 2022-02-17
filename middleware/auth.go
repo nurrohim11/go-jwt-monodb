@@ -1,17 +1,21 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
+	"jwtgolang-mongodb/helpers"
+
 	"github.com/gin-gonic/gin"
-	"github.com/riad-safowan/JWT-GO-MongoDB/helpers"
 )
 
 func Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		clientToken := c.Request.Header.Get("Authorization")
+		// check token
+		// check if the first string starting with bearer or not
 		if clientToken == "" {
 			clientToken = c.Request.Header.Get("token")
 		} else if strings.HasPrefix(clientToken, "Bearer ") {
@@ -19,13 +23,15 @@ func Authenticate() gin.HandlerFunc {
 			splitToken := strings.Split(reqToken, "Bearer ")
 			clientToken = splitToken[1]
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid authorization token"})
+			response := helpers.ApiResponse("Authentication failed", http.StatusInternalServerError, "error", gin.H{"error": "invalid authorization token"})
+			c.JSON(http.StatusInternalServerError, response)
 			c.Abort()
 			return
 		}
 
 		if clientToken == "" {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "no Authorization header provided"})
+			response := helpers.ApiResponse("Authentication failed", http.StatusInternalServerError, "error", gin.H{"error": "no Authorization header provided"})
+			c.JSON(http.StatusInternalServerError, response)
 			c.Abort()
 			return
 		}
@@ -33,11 +39,13 @@ func Authenticate() gin.HandlerFunc {
 		claims, err := helpers.ValidateToken(clientToken)
 
 		if err != "" {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+			response := helpers.ApiResponse("Authentication failed", http.StatusInternalServerError, "error", gin.H{"error": err})
+			c.JSON(http.StatusInternalServerError, response)
 			c.Abort()
 			return
 		}
 
+		fmt.Println(claims)
 		if claims.Token_type == "access_token" {
 			c.Set("email", claims.Email)
 			c.Set("first_name", claims.First_name)
